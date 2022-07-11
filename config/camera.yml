@@ -1,0 +1,9 @@
+image_size:
+  width: 640
+  height: 480
+
+intrinsic:
+  fx: 517.3
+  fy: 516.5
+  cx: 318.6
+  cy: 255.3

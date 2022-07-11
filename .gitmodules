@@ -1,0 +1,3 @@
+[submodule "thirdparty/popl"]
+	path = thirdparty/popl
+	url = https://github.com/badaix/popl
