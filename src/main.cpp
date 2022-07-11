@@ -8,6 +8,7 @@
 #include <pcl/features/integral_image_normal.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
+#include <chrono>
 #include <opencv2/opencv.hpp>
 
 #ifdef USE_BACKWARD_CPP
@@ -82,7 +83,20 @@ void ConvertOrganizedSurfaceNormalsToCVImages(const pcl::PointCloud<pcl::Normal>
     }
 }
 
-cv::Mat colorize_depth_image(const cv::Mat &depth_image_f)
+pcl::PointCloud<pcl::Normal>::Ptr
+EstimateNormalAndCurvature(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const float &max_depth_change_factor, const float &normal_smoothing_size)
+{
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::IntegralImageNormalEstimation<pcl::PointXYZ, pcl::Normal> normalEstimation;
+    normalEstimation.setInputCloud(cloud);
+    normalEstimation.setNormalEstimationMethod(normalEstimation.COVARIANCE_MATRIX);
+    normalEstimation.setMaxDepthChangeFactor(max_depth_change_factor);
+    normalEstimation.setNormalSmoothingSize(normal_smoothing_size);
+    normalEstimation.compute(*normals);
+    return normals;
+}
+
+cv::Mat ColorizeDepthImage(const cv::Mat &depth_image_f)
 {
     cv::Mat depth_image_clamped, depth_image_uc8, depth_mask, depth_image_colorized;
     cv::inRange(depth_image_f, 0, 2.0, depth_mask);
@@ -92,14 +106,16 @@ cv::Mat colorize_depth_image(const cv::Mat &depth_image_f)
     return depth_image_colorized;
 }
 
-cv::Mat colorize_surface_normal_image(const cv::Mat& surface_normal_image){
+cv::Mat ColorizeSurfaceNormalImage(const cv::Mat &surface_normal_image)
+{
     cv::Mat surface_normal_image_colorized;
     cv::Mat surface_normal_image_biased = surface_normal_image + cv::Scalar(1.0f);
     surface_normal_image_biased.convertTo(surface_normal_image_colorized, CV_8UC3, 128);
     return surface_normal_image_colorized;
 }
 
-cv::Mat colrize_curvature_image(const cv::Mat& surface_curvature_image){
+cv::Mat ColrizeCurvatureImage(const cv::Mat &surface_curvature_image)
+{
     cv::Mat surface_curvature_image_uc8, surface_curvature_image_colorized;
     surface_curvature_image.convertTo(surface_curvature_image_uc8, CV_8UC1, 255);
     cv::applyColorMap(surface_curvature_image_uc8, surface_curvature_image_colorized, cv::COLORMAP_JET);
@@ -117,8 +133,8 @@ int main(int argc, char *argv[])
     popl::OptionParser op("Allowed options");
     auto config_file_option = op.add<popl::Value<std::string>>("c", "config", "camera configuration file path", "../config/camera.yml");
     auto input_depth_image_option = op.add<popl::Value<std::string>>("i", "image", "target depth image path", "../data/freiburg1.png");
-    auto max_depth_change_factor_option = op.add<popl::Value<float>>("m", "max_depth_change_factor", "max depth change factor for surface normal computation", 0.005f);
-    auto normal_smoothing_size_option = op.add<popl::Value<float>>("n", "normal_smoothing_size", "normal smoothing size for surface normal computation", 5.0f);
+    auto max_depth_change_factor_option = op.add<popl::Value<float>>("m", "max_depth_change_factor", "max depth change factor for surface normal computation", 0.05f);
+    auto normal_smoothing_size_option = op.add<popl::Value<float>>("n", "normal_smoothing_size", "normal smoothing size for surface normal computation", 10.0f);
     auto pcd_3d_visualizer_option = op.add<popl::Switch>("p", "enable_pcd_3d_visualizer", "if using the option, the pcd 3d visualizer will be launch");
 
     try
@@ -170,15 +186,18 @@ int main(int argc, char *argv[])
 
     /* Surface normal calculation
      */
+
     float max_depth_change_factor = max_depth_change_factor_option->value();
     float normal_smoothing_size = normal_smoothing_size_option->value();
-    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-    pcl::IntegralImageNormalEstimation<pcl::PointXYZ, pcl::Normal> normalEstimation;
-    normalEstimation.setInputCloud(cloud);
-    normalEstimation.setNormalEstimationMethod(normalEstimation.COVARIANCE_MATRIX);
-    normalEstimation.setMaxDepthChangeFactor(max_depth_change_factor);
-    normalEstimation.setNormalSmoothingSize(normal_smoothing_size);
-    normalEstimation.compute(*normals);
+
+    std::chrono::system_clock::time_point start, end;
+    start = std::chrono::system_clock::now();
+
+    pcl::PointCloud<pcl::Normal>::Ptr normals = EstimateNormalAndCurvature(cloud, max_depth_change_factor, normal_smoothing_size);
+
+    end = std::chrono::system_clock::now();
+    double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "Elapsed: " << elapsed << std::endl;
 
     /* Launch pcd viewer
      */
@@ -205,9 +224,9 @@ int main(int argc, char *argv[])
     /*  Draw 2D images
      */
     cv::Mat canvas;
-    cv::Mat surface_normal_image_colorized = colorize_surface_normal_image(surface_normal_image);
-    cv::Mat surface_curvature_image_colorized = colrize_curvature_image(surface_curvature_image);
-    cv::Mat depth_image_colorized = colorize_depth_image(depth_image_f);
+    cv::Mat surface_normal_image_colorized = ColorizeSurfaceNormalImage(surface_normal_image);
+    cv::Mat surface_curvature_image_colorized = ColrizeCurvatureImage(surface_curvature_image);
+    cv::Mat depth_image_colorized = ColorizeDepthImage(depth_image_f);
 
     cv::hconcat(depth_image_colorized, surface_normal_image_colorized, canvas);
     cv::hconcat(canvas.clone(), surface_curvature_image_colorized, canvas);
