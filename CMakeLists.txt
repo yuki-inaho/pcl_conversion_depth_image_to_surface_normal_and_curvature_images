@@ -8,6 +8,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
 endif()
 
+add_compile_options(-Wall -Wextra)
 add_compile_options(
     "$<$<CONFIG:Debug>:-Og>"
     "$<$<CONFIG:Release>:-O3>"
