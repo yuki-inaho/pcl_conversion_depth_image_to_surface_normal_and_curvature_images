@@ -9,4 +9,4 @@ https://vision.in.tum.de/data/datasets/rgbd-dataset
 - [opencv](https://github.com/opencv/opencv)
 - [yaml-cpp](https://github.com/jbeder/yaml-cpp)
 - [popl](https://github.com/badaix/popl)
-- [backward-cpp](https://github.com/bombela/backward-cpp)
+- [backward-cpp](https://github.com/bombela/backward-cpp): as a submodule
